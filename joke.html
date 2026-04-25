@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Comedy Club | 3D Joke Generator</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Syne:wght@700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-deep: #050510;
+            --glass-bg: rgba(15, 15, 30, 0.65);
+            --glass-border: rgba(245, 166, 35, 0.15);
+            --accent-gold: #f5a623;
+            --accent-glow: rgba(245, 166, 35, 0.4);
+            --text-main: #f8f9fa;
+            --text-muted: #a0a0b5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            width: 100%;
+            height: 100%;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 2rem;
+            z-index: 10;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: 3.5rem;
+            background: linear-gradient(135deg, #fff, var(--accent-gold));
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Glassmorphism Control Panel */
+        .controls-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-pill {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            padding: 0.5rem 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            font-weight: 600;
+        }
+
+        .btn-pill:hover,
+        .btn-pill.active {
+            background: rgba(245, 166, 35, 0.1);
+            border-color: var(--accent-gold);
+            color: var(--accent-gold);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        /* Main Generate Button */
+        .btn-generate {
+            width: 100%;
+            padding: 1.2rem;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(45deg, #d4880a, var(--accent-gold));
+            color: #000;
+            font-size: 1.2rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 1rem;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px var(--accent-glow);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 3D Modal Scene */
+        .modal-scene {
+            perspective: 1000px;
+            width: 100%;
+            height: 0;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: visible;
+        }
+
+        .modal-scene.active {
+            height: 250px;
+            opacity: 1;
+            margin-top: 2rem;
+        }
+
+        /* The 3D Object */
+        .joke-card-3d {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-90deg);
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-scene.active .joke-card-3d {
+            transform: rotateX(0deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.9), rgba(15, 15, 25, 0.9));
+            border: 1px solid var(--accent-gold);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(245, 166, 35, 0.1);
+        }
+
+        .setup {
+            font-size: 1.2rem;
+            font-weight: 400;
+            margin-bottom: 1rem;
+        }
+
+        .punchline {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--accent-gold);
+            text-shadow: 0 0 10px var(--accent-glow);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.5s ease 0.3s;
+        }
+
+        .punchline.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .loader {
+            display: none;
+            color: var(--accent-gold);
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-bg"></div>
+
+    <div class="container">
+        <header>
+            <h1>AI Comedy</h1>
+            <p style="color: var(--text-muted);">Configure parameters. Generate laughs.</p>
+        </header>
+
+        <div class="controls-card">
+            <div class="filter-group" id="category-filters">
+                <button class="btn-pill active" data-cat="Any">Any</button>
+                <button class="btn-pill" data-cat="Programming">Tech</button>
+                <button class="btn-pill" data-cat="Misc">Random</button>
+                <button class="btn-pill" data-cat="Pun">Puns</button>
+                <button class="btn-pill" data-cat="Dark">Dark</button>
+            </div>
+
+            <button class="btn-generate" id="generate-btn">Initialize Joke Sequence</button>
+        </div>
+
+        <div class="modal-scene" id="modal-wrapper">
+            <div class="joke-card-3d">
+                <div class="card-face">
+                    <div class="loader" id="loader">Computing humor...</div>
+                    <div class="setup" id="joke-setup"></div>
+                    <div class="punchline" id="joke-punchline"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. UI Logic ---
+        let currentCategory = 'Any';
+
+        document.querySelectorAll('.btn-pill').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.btn-pill').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentCategory = e.target.dataset.cat;
+            });
+        });
+
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('generate-btn');
+            const modal = document.getElementById('modal-wrapper');
+            const setupEl = document.getElementById('joke-setup');
+            const punchlineEl = document.getElementById('joke-punchline');
+            const loader = document.getElementById('loader');
+
+            // Reset UI
+            btn.disabled = true;
+            punchlineEl.classList.remove('show');
+            setupEl.textContent = '';
+            punchlineEl.textContent = '';
+
+            // Pop open the 3D modal
+            modal.classList.add('active');
+            loader.style.display = 'block';
+
+            try {
+                // Using a free, public API so no keys are exposed in client code
+                const response = await fetch(`https://v2.jokeapi.dev/joke/${currentCategory}?type=twopart&safe-mode`);
+                const data = await response.json();
+
+                if (!data.error) {
+                    loader.style.display = 'none';
+                    setupEl.textContent = data.setup;
+                    punchlineEl.textContent = data.delivery;
+
+                    // Delay punchline for comedic timing
+                    setTimeout(() => {
+                        punchlineEl.classList.add('show');
+                    }, 1200);
+                } else {
+                    throw new Error("API Error");
+                }
+            } catch (err) {
+                loader.style.display = 'none';
+                setupEl.textContent = "Oops! Our comedy algorithms crashed.";
+                punchlineEl.textContent = "Please try again.";
+                punchlineEl.classList.add('show');
+            }
+
+            btn.disabled = false;
+        });
+
+        // --- 2. Three.js Background Logic ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-bg').appendChild(renderer.domElement);
+
+        // Particles
+        const geometry = new THREE.BufferGeometry();
+        const particlesCount = 300;
+        const posArray = new Float32Array(particlesCount * 3);
+
+        for (let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 15;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const material = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0xf5a623,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        const particlesMesh = new THREE.Points(geometry, material);
+        scene.add(particlesMesh);
+
+        // Wireframe Torus (Abstract Tech feel)
+        const torusGeometry = new THREE.TorusGeometry(3, 0.5, 16, 100);
+        const torusMaterial = new THREE.MeshBasicMaterial({
+            color: 0x6c5ce7,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.15
+        });
+        const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+        scene.add(torus);
+
+        camera.position.z = 5;
+
+        // Mouse interaction
+        let mouseX = 0;
+        let mouseY = 0;
+        document.addEventListener('mousemove', (event) => {
+            mouseX = event.clientX / window.innerWidth - 0.5;
+            mouseY = event.clientY / window.innerHeight - 0.5;
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            particlesMesh.rotation.y = elapsedTime * 0.05;
+            particlesMesh.rotation.x = elapsedTime * 0.02;
+
+            torus.rotation.x = elapsedTime * 0.1;
+            torus.rotation.y = elapsedTime * 0.15;
+
+            // Parallax based on mouse
+            camera.position.x += (mouseX * 2 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 2 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>
